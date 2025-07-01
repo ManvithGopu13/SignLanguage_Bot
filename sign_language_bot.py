@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from process_video_to_txt_audio import extract_frames, predict_text_from_frames, generate_speech_from_text
+
 # Your Telegram Bot Token
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
@@ -45,16 +47,24 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_path = f"downloads/video_{video.file_unique_id}.mp4"
         await file.download_to_drive(file_path)
 
-        await update.message.reply_text("✅ Downloaded! Processing the video now...")
-        # TODO: Your Gemma3n + video processing logic here
+        await update.message.reply_text("✅ Downloaded! Extracting frames...")
 
+        frames = extract_frames(video_path= file_path)
+        text = predict_text_from_frames(frames= frames)
+
+        await update.message.reply_text(f"Translated Text: {text}")
+
+        audio_path = generate_speech_from_text(text= text, output_path= f"{file_path}_speech.mp3")
+        with open(audio_path, 'rb') as audio_file:
+            await update.message.reply_audio(audio= audio_file)
+        
     except Exception as e:
-        await update.message.reply_text("❌ Error while downloading the video.")
-        print("Download error:", e)
+        await update.message.reply_text("❌ Failed to process the video.")
+        print("Video processing error:", e)
 
 # Main function to run bot
 def main():
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).read_timeout(60).connect_timeout(60).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
